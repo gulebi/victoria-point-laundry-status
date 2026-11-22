@@ -142,8 +142,22 @@
   font-size: 12px;
   line-height: 1.4;
 }
-.tracking-button:hover { background: var(--tracking-hover); }
-.machine-bottom .tracking-button { margin-top: 10px; }
+.tracking-button:not(:disabled):hover { background: var(--tracking-hover); }
+.machine-bottom .tracking-button {
+  display: block;
+  width: min(100%, 132px);
+  height: 44px;
+  margin-top: 10px;
+  padding: 4px 8px;
+}
+.tracking-button:disabled {
+  color: var(--muted);
+  background: var(--overview-muted);
+  border-color: var(--control-border);
+  cursor: default;
+}
+.tracking-list { display: grid; gap: 10px; margin-top: 16px; }
+.tracking-feedback { margin: 0; font-size: 12px; color: var(--error-ink); }
 .tracking-panel {
   display: flex;
   flex-wrap: wrap;
@@ -153,7 +167,6 @@
   border: 1px solid var(--tracking-border);
   border-radius: 12px;
   background: var(--surface);
-  margin-bottom: 18px;
   padding: 14px 16px;
 }
 .tracking-ready { background: var(--overview-bg); }

@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { decodeTracking, startTracking, TRACKING_KEY, updateTracking } from '../lib/machine-tracking.mjs';
+import { decodeSelections, startTracking, trackingKey, TRACKING_KEY, updateTracking } from '../lib/machine-tracking.mjs';
+
+let fallbackQueue = Promise.resolve();
 
 function notificationPermission() {
   return window.isSecureContext && typeof window.Notification?.requestPermission === 'function'
@@ -7,13 +9,23 @@ function notificationPermission() {
 }
 
 function withTrackingLock(action) {
-  return navigator.locks ? navigator.locks.request(TRACKING_KEY, action) : Promise.resolve().then(action);
+  if (navigator.locks) return navigator.locks.request(TRACKING_KEY, action);
+  const result = fallbackQueue.then(action);
+  fallbackQueue = result.catch(() => {});
+  return result;
 }
 
 function requestWatch(method, body) {
   return fetch('/api/notification-watches', {
     method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
   });
+}
+
+async function fetchPushKey(signal) {
+  if (!('PushManager' in window) || !('serviceWorker' in navigator)) return '';
+  const response = await fetch('/api/notification-watches', { signal, cache: 'no-store' });
+  const config = response.ok ? await response.json() : null;
+  return config?.publicKey || '';
 }
 
 async function subscribeForPush(key) {
@@ -50,25 +62,28 @@ async function showReadyNotification(tracking) {
 }
 
 export function useMachineTracking() {
-  const [tracking, setTracking] = useState(null);
-  const [completion, setCompletion] = useState(null);
+  const [selections, setSelections] = useState([]);
+  const [completions, setCompletions] = useState([]);
   const [permission, setPermission] = useState('unavailable');
   const [storageUnavailable, setStorageUnavailable] = useState(false);
   const [pushKey, setPushKey] = useState('');
   const [alertError, setAlertError] = useState('');
-  const current = useRef(null);
+  const current = useRef([]);
   const memoryOnly = useRef(false);
+  const permissionRequest = useRef(null);
 
-  const sync = useCallback(record => {
-    current.current = record;
-    setTracking(record);
-    if (record) setCompletion(null);
+  const sync = useCallback(records => {
+    current.current = records;
+    setSelections(records);
+    setCompletions(previous => previous.length
+      ? previous.filter(item => !records.some(record => trackingKey(record) === trackingKey(item)))
+      : previous);
   }, []);
 
   const load = useCallback(() => {
     if (!memoryOnly.current) {
       try {
-        return decodeTracking(window.localStorage.getItem(TRACKING_KEY));
+        return decodeSelections(window.localStorage.getItem(TRACKING_KEY));
       } catch {
         memoryOnly.current = true;
         setStorageUnavailable(true);
@@ -77,17 +92,17 @@ export function useMachineTracking() {
     return current.current;
   }, []);
 
-  const save = useCallback(record => {
+  const save = useCallback(records => {
     if (!memoryOnly.current) {
       try {
-        if (record) window.localStorage.setItem(TRACKING_KEY, JSON.stringify(record));
+        if (records.length) window.localStorage.setItem(TRACKING_KEY, JSON.stringify(records));
         else window.localStorage.removeItem(TRACKING_KEY);
       } catch {
         memoryOnly.current = true;
         setStorageUnavailable(true);
       }
     }
-    sync(record);
+    sync(records);
   }, [sync]);
 
   useEffect(() => {
@@ -98,12 +113,7 @@ export function useMachineTracking() {
     sync(load());
     syncPermission();
     const controller = new AbortController();
-    if ('PushManager' in window && 'serviceWorker' in navigator) {
-      fetch('/api/notification-watches', { signal: controller.signal, cache: 'no-store' })
-        .then(response => response.ok ? response.json() : null)
-        .then(config => { if (config?.publicKey) setPushKey(config.publicKey); })
-        .catch(() => {});
-    }
+    fetchPushKey(controller.signal).then(key => { if (key) setPushKey(key); }).catch(() => {});
     window.addEventListener('storage', syncStorage);
     window.addEventListener('focus', syncPermission);
     return () => {
@@ -116,24 +126,37 @@ export function useMachineTracking() {
   async function enableNotifications() {
     let granted = notificationPermission();
     try {
-      if (granted === 'default') granted = await Notification.requestPermission();
+      if (granted === 'default') {
+        if (!permissionRequest.current) {
+          permissionRequest.current = Notification.requestPermission().finally(() => { permissionRequest.current = null; });
+        }
+        granted = await permissionRequest.current;
+      }
       setPermission(granted);
     } catch {
       setPermission('unavailable');
       return;
     }
-    if (granted !== 'granted' || !pushKey) return;
+    if (granted !== 'granted') return;
     try {
       await withTrackingLock(async () => {
-        const selected = load();
-        if (!selected || selected.watchId) return;
-        const subscription = await subscribeForPush(pushKey);
-        const response = await requestWatch('POST', { machineId: selected.machineId, subscription });
-        if (!response.ok) throw new Error('Could not register background alerts');
-        const { watchId, expiresAt } = await response.json();
-        if (typeof watchId !== 'string' || !Number.isFinite(expiresAt)) throw new Error('Invalid background alert');
-        save({ ...selected, watchId, watchExpiresAt: expiresAt });
-        setAlertError('');
+        const records = load();
+        if (!records.some(record => !record.watchId)) return;
+        const key = pushKey || await fetchPushKey();
+        if (!key) return;
+        setPushKey(key);
+        const subscription = await subscribeForPush(key);
+        const results = await Promise.allSettled(records.map(async record => {
+          if (record.watchId) return record;
+          const response = await requestWatch('POST', { machineId: record.machineId, subscription });
+          if (!response.ok) throw new Error('Could not register background alert');
+          const { watchId, expiresAt } = await response.json();
+          if (typeof watchId !== 'string' || !Number.isFinite(expiresAt)) throw new Error('Invalid background alert');
+          return { ...record, watchId, watchExpiresAt: expiresAt };
+        }));
+        save(results.map((result, index) => result.status === 'fulfilled' ? result.value : records[index]));
+        setAlertError(results.some(result => result.status === 'rejected')
+          ? 'Some background alerts could not be enabled. Try again.' : '');
       });
     } catch {
       setAlertError('Could not enable background alerts. Try again.');
@@ -144,19 +167,24 @@ export function useMachineTracking() {
     const record = startTracking(snapshot, machine);
     if (!record) return;
     setAlertError('');
-    void withTrackingLock(() => save(record));
+    void withTrackingLock(() => {
+      const records = load();
+      if (!records.some(item => trackingKey(item) === trackingKey(record))) save([...records, record]);
+    }).catch(() => setAlertError('Could not track this machine. Try again.'));
     void enableNotifications();
   }
 
-  async function stopTracking() {
+  async function stopTracking(selection) {
     try {
       await withTrackingLock(async () => {
-        const selected = load();
-        if (selected?.watchId && selected.watchExpiresAt > Date.now()) {
+        const records = load();
+        const selected = records.find(item => trackingKey(item) === trackingKey(selection) && item.createdAt === selection.createdAt);
+        if (!selected) return;
+        if (selected.watchId && selected.watchExpiresAt > Date.now()) {
           const response = await requestWatch('DELETE', { watchId: selected.watchId });
           if (!response.ok) throw new Error('Could not cancel background alerts');
         }
-        save(null);
+        save(records.filter(item => item !== selected));
         setAlertError('');
       });
     } catch {
@@ -164,30 +192,34 @@ export function useMachineTracking() {
     }
   }
 
-  const needsBrowserPolling = useCallback(() => current.current !== null && !current.current.watchId, []);
+  const needsBrowserPolling = useCallback(() => current.current.some(record => !record.watchId), []);
 
   const observeSnapshot = useCallback(snapshot => {
-    if (!current.current) return;
+    if (!current.current.length) return;
     void withTrackingLock(() => {
-      // Read the latest record inside the lock to avoid duplicate alerts from other tabs.
+      // Consult the latest selections so another tab cannot deliver the same alert twice.
       const previous = load();
-      if (previous?.watchId && previous.watchExpiresAt <= Date.now()) {
-        save(null);
-        return;
+      const now = Date.now();
+      const next = [];
+      const completed = [];
+      for (const record of previous) {
+        if (record.watchId && record.watchExpiresAt <= now) continue;
+        const updated = updateTracking(record, snapshot, now);
+        if (updated?.phase === 'ready') completed.push(updated);
+        else if (updated) next.push(updated);
       }
-      const next = updateTracking(previous, snapshot);
-      if (next === previous) return;
-      if (next?.phase !== 'ready') {
-        save(next);
-        return;
+      if (next.length !== previous.length || next.some((record, index) => record !== previous[index])) save(next);
+      if (completed.length) {
+        setCompletions(recent => [...recent, ...completed]);
+        if (notificationPermission() === 'granted') {
+          for (const record of completed) if (!record.watchId) void showReadyNotification(record);
+        }
       }
-      save(null);
-      setCompletion(next);
-      if (!previous.watchId && notificationPermission() === 'granted') void showReadyNotification(next);
     }).catch(() => {});
   }, [load, save]);
 
-  return { tracking, completion, permission, storageUnavailable, trackMachine, stopTracking,
-    canEnablePush: Boolean(pushKey), alertError, dismissCompletion: () => setCompletion(null),
+  return { selections, completions, permission, storageUnavailable, trackMachine, stopTracking,
+    canEnablePush: Boolean(pushKey), alertError,
+    dismissCompletion: record => setCompletions(recent => recent.filter(item => item !== record)),
     enableNotifications, needsBrowserPolling, observeSnapshot };
 }

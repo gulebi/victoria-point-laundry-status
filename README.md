@@ -30,7 +30,7 @@ Supply values to the server. Keep them out of Git and avoid the `NEXT_PUBLIC_` p
 
 ## Machine alerts
 
-**This is my machine** tracks one cycle. Select a machine before or during use and allow notifications. The dashboard waits until Circuit Go reports an active cycle followed by availability, then clears the selection.
+Use **This is my machine** on any machines you are using. Each selection follows one cycle, starting before or during use. When Circuit Go reports that cycle has finished, the dashboard clears that selection and leaves the other machines tracked. Use **Stop tracking** below the cards to cancel a selection.
 
 When background alerts are configured and the browser registers successfully, the server continues tracking after the tab closes. With tab-based alerts, the page checks availability while it runs.
 

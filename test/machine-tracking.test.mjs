@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { decodeTracking, startTracking, updateTracking } from '../lib/machine-tracking.mjs';
+import { decodeSelections, decodeTracking, startTracking, updateTracking } from '../lib/machine-tracking.mjs';
 
 const NOW = Date.parse('2026-11-22T12:00:00Z');
 const free = { id: 'washer-4', name: 'WASHER 4', state: 'available', cycleActive: false, cycleId: 'first-run' };
@@ -11,6 +11,15 @@ const snapshot = (machine, checkedAt = NOW, roomId = 'laundry') => ({
   checkedAt: new Date(checkedAt).toISOString(),
   validUntil: new Date(checkedAt + 90000).toISOString(),
   machines: [machine],
+});
+
+test('the browser can restore an older single selection or several independent machines', () => {
+  const washing = startTracking(snapshot(running), running, NOW);
+  const dryer = { ...free, id: 'dryer-1', name: 'DRYER 1' };
+  const drying = startTracking(snapshot(dryer), dryer, NOW);
+  assert.deepEqual(decodeSelections(JSON.stringify(washing)), [washing]);
+  assert.deepEqual(decodeSelections(JSON.stringify([washing, drying, washing, null, { phase: 'waiting' }])), [washing, drying]);
+  assert.deepEqual(decodeSelections('{'), []);
 });
 
 test('a fresh run is saved locally and completes once when the same machine becomes free', () => {

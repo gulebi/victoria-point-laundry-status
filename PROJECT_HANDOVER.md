@@ -11,7 +11,7 @@ Victoria Point 4 Laundry is a React dashboard backed by a Next.js App Router end
 | `lib/server.mjs`, `lib/status-cache.mjs` | Server-only environment configuration and a shared 30-second cache per instance. |
 | `lib/circuitgo.mjs` | Scoped Firebase reads, token refresh, booking interpretation and machine states. |
 | `lib/machine-tracking.mjs`, `app/use-machine-tracking.js` | Local tracking state, one-cycle detection and notification permission. |
-| `app/api/notification-watches/`, `lib/notification-watches.mjs` | Redis-backed alerts for one cycle and an authenticated QStash poll handler. |
+| `app/api/notification-watches/`, `lib/notification-watches.mjs` | Redis-backed machine alerts and an authenticated QStash poll handler. |
 | `public/laundry-notifications.js` | Receives Web Push notifications and opens or focuses the dashboard on click. |
 | `lib/demo.mjs`, `test/` | Synthetic demo status, tests for timing, bookings, authentication, caching and tracking. |
 
@@ -23,11 +23,11 @@ The server reads the configured location, its scheduled bookings and active inst
 
 ## Personal machine alerts
 
-Selecting an available machine waits for a fresh snapshot that shows a cycle starting. A connection hold alone does not count as a start. The choice is stored in the current browser's `localStorage` and shared across tabs. Once Circuit Go reports the tracked cycle's machine available, the dashboard removes the active record before showing the alert. The completion message lasts until dismissal, a new selection or reload.
+Selecting an available machine waits for a fresh snapshot that shows a cycle starting. A connection hold alone does not count as a start. The browser stores selections in `localStorage` and shares them across tabs. The reader supports the earlier single-record format. Once Circuit Go reports a tracked cycle's machine available, the dashboard removes its active record before showing the alert. The completion message lasts until dismissal, a new selection for that machine or reload.
 
 A different cycle ID indicates a different payment. If that payment appears before an available snapshot for the tracked cycle, the dashboard drops the old selection silently. If an upstream payment timestamp is missing, the dashboard relies on transitions from running to available. Browser locks serialise tracking changes across tabs when supported.
 
-If the server confirms a background registration, the browser leaves OS delivery to the service worker and the server checks for completion. Each endpoint has one active watch. Redis records expire after six hours, QStash calls are authenticated, and an atomic lock prevents concurrent polls. A short delivery retry window retains one notification tag across attempts. Without a background registration, the page continues offering tab-based alerts when permission is granted.
+If the server confirms a background registration, the browser leaves OS delivery to the service worker and the server checks for completion. Each browser endpoint can hold one active watch per machine. Existing endpoint-only watches remain valid. Redis records expire after six hours, QStash calls are authenticated, and an atomic lock prevents concurrent polls. A short delivery retry window retains one notification tag per watch across attempts. Without a background registration, the page continues offering tab-based alerts when permission is granted.
 
 ## Authentication
 

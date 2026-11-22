@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { machineDetail } from '../lib/machine-detail.mjs';
+import { trackingKey } from '../lib/machine-tracking.mjs';
 import { InfoCircleIcon, RefreshIcon, WashMachineIcon } from './icons';
 import ThemeToggle from './theme-toggle';
 import { useMachineTracking } from './use-machine-tracking';
@@ -38,16 +39,18 @@ function MachineCard({ machine, stale, now, selected, onTrack }) {
     <div className="machine-bottom">
       <div className="machine-state"><span className="dot"/>{stale ? 'Status out of date' : machine.label}</div>
       {detail && <span className="machine-detail">{detail}</span>}
-      {onTrack && (ready || busy) && <button
+      <button
+        type="button"
         className="tracking-button"
-        aria-label={`Track ${machine.name} as my machine`}
+        aria-label={selected ? `Tracking ${machine.name}` : `Track ${machine.name} as my machine`}
+        disabled={selected || (!ready && !busy)}
         onClick={() => onTrack(machine)}
-      >This is my machine</button>}
+      >{selected ? 'Tracking' : 'This is my machine'}</button>
     </div>
   </article>;
 }
 
-function TrackingPanel({ tracking, permission, storageUnavailable, canEnablePush, alertError, enableNotifications, stopTracking, dismissCompletion }) {
+function TrackingPanel({ tracking, permission, canEnablePush, enableNotifications, stopTracking, dismissCompletion }) {
   const ready = tracking.phase === 'ready';
   const canEnable = !tracking.watchId && (permission === 'default' || (permission === 'granted' && canEnablePush));
   let notificationHint = 'Enable notifications for a system alert.';
@@ -56,7 +59,7 @@ function TrackingPanel({ tracking, permission, storageUnavailable, canEnablePush
   else if (permission === 'granted') notificationHint = canEnablePush
     ? 'Enable background alerts to get notified with the tab closed.'
     : 'Alerts currently work while the dashboard is running.';
-  return <aside className={`tracking-panel${ready ? ' tracking-ready' : ''}`} aria-label="Your machine">
+  return <aside className={`tracking-panel${ready ? ' tracking-ready' : ''}`} aria-label={`Alerts for ${tracking.name}`}>
     <div role="status">
       <strong>{ready ? `${tracking.name} was reported free` : `Tracking ${tracking.name}`}</strong>
       {ready
@@ -65,12 +68,10 @@ function TrackingPanel({ tracking, permission, storageUnavailable, canEnablePush
           <p>{tracking.phase === 'waiting' ? 'Waiting for Circuit Go to show it in use.' : 'Watching for the next available status.'}</p>
           <p>{notificationHint}</p>
         </>}
-      {storageUnavailable && <p>Browser storage is unavailable. The selection will reset if you reload this tab.</p>}
-      {alertError && <p role="alert">{alertError}</p>}
     </div>
     <div className="tracking-actions">
       {!ready && canEnable && <button className="tracking-button" onClick={enableNotifications}>{canEnablePush ? 'Enable background alerts' : 'Enable notifications'}</button>}
-      <button className="tracking-button" onClick={ready ? dismissCompletion : stopTracking}>{ready ? 'Dismiss' : 'Stop tracking'}</button>
+      <button className="tracking-button" onClick={() => ready ? dismissCompletion(tracking) : stopTracking(tracking)}>{ready ? 'Dismiss' : 'Stop tracking'}</button>
     </div>
   </aside>;
 }
@@ -134,8 +135,9 @@ export default function Home() {
   const good = data && !stale;
   const machines = data?.machines.filter(machine => filter === 'all' || machine.type === filter);
   const refreshLabel = loading ? 'Refreshing' : 'Refresh';
-  const { tracking, completion } = tracker;
-  const track = tracking ? null : machine => tracker.trackMachine(data, machine);
+  const { selections, completions, alertError, storageUnavailable } = tracker;
+  const selectedIds = new Set(selections.filter(record => record.roomId === data?.room?.id).map(record => record.machineId));
+  const track = machine => tracker.trackMachine(data, machine);
 
   return <main>
     <header className="site-header">
@@ -159,17 +161,21 @@ export default function Home() {
     </section>
 
     <section className="machines-section" aria-label="Machines">
-      {(tracking || completion) && <TrackingPanel {...tracker} tracking={tracking || completion}/>}
       <div className="section-toolbar"><div className="filters" role="group" aria-label="Machine type">{[['all', 'All machines'], ['washer', 'Washers'], ['dryer', 'Dryers']].map(([value, label]) => <button key={value} onClick={() => setFilter(value)} aria-pressed={filter === value} className={filter === value ? 'selected' : ''}>{label}</button>)}</div><button className="refresh-button" onClick={() => refreshRef.current?.()} disabled={loading} aria-label={refreshLabel}><RefreshIcon spinning={loading}/><span>{refreshLabel}</span></button></div>
       <div className="machine-grid">{machines ? machines.map(machine => <MachineCard
         key={machine.id}
         machine={machine}
         stale={stale}
         now={clock}
-        selected={tracking?.roomId === data.room?.id && tracking?.machineId === machine.id}
+        selected={selectedIds.has(machine.id)}
         onTrack={track}
       />) : [1, 2, 3, 4].map(value => <div className="machine skeleton" aria-hidden="true" key={value}><div/><div/><div/></div>)}</div>
       {machines?.length === 0 && <p className="empty">{data.total ? 'No machines match this filter.' : 'Circuit Go returned no machines.'}</p>}
+      {(selections.length > 0 || completions.length > 0 || alertError) && <div className="tracking-list">
+        {storageUnavailable && <p className="tracking-feedback">Browser storage is unavailable. Selections reset if you reload this tab.</p>}
+        {alertError && <p className="tracking-feedback" role="alert">{alertError}</p>}
+        {[...selections, ...completions].map(record => <TrackingPanel key={trackingKey(record)} {...tracker} tracking={record}/>)}
+      </div>}
       <div className="update-line"><span><span className={`tiny-dot ${good ? 'fresh' : ''}`}/>{data ? `Last checked at ${timeLabel(data.checkedAt)} (London)` : 'Waiting for Circuit Go'}</span><span>{good ? 'Refreshes every minute' : 'Retries automatically'}</span></div>
       {good && data.partial && <div className="notice partial">Some machine statuses could not be confirmed.</div>}
     </section>
