@@ -1,31 +1,38 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { InfoCircleIcon, RefreshIcon, TumbleDryIcon, WashMachineIcon } from './icons';
+import { machineDetail } from '../lib/machine-detail.mjs';
+import { InfoCircleIcon, RefreshIcon, WashMachineIcon } from './icons';
 import { useMachineTracking } from './use-machine-tracking';
+
+function MachineIcon({ dryer = false }) {
+  return <svg width="74" height="86" viewBox="0 0 74 86" fill="none" aria-hidden="true">
+    <rect x="8" y="5" width="58" height="74" rx="8" stroke="currentColor" strokeWidth="2"/>
+    <path d="M9 23h56M19 14h11M55 14h1" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+    <circle cx="37" cy="48" r="18" stroke="currentColor" strokeWidth="2"/>
+    {dryer ? <><path d="M29 53c-5-8 8-7 3-15M37 57c-5-8 8-7 3-15M45 53c-5-8 8-7 3-15" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"/></>
+      : <path d="M21 49c6-7 10 7 16 0s10 7 16 0" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"/>}
+    <path d="M18 80v2M56 80v2" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+  </svg>;
+}
 
 function timeLabel(value) {
   if (!value) return '—';
   return new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', hour: '2-digit', minute: '2-digit', second: '2-digit' }).format(new Date(value));
 }
 
-function machineDetail(machine, stale) {
-  if (stale) return `Last reported as ${machine.label.toLowerCase()}`;
-  if (machine.state !== 'busy' || !Number.isSafeInteger(machine.elapsedMinutes)) return null;
-  if (machine.elapsedMinutes === 0) return 'Running for under 1 min';
-  return `Running for about ${machine.elapsedMinutes} min`;
-}
-
-function MachineCard({ machine, stale, selected, onTrack }) {
+function MachineCard({ machine, stale, now, selected, onTrack }) {
   const ready = machine.state === 'available' && !stale;
   const busy = machine.state === 'busy' && !stale;
   const kind = { washer: 'Washer', dryer: 'Dryer', other: 'Machine' }[machine.type];
-  const detail = machineDetail(machine, stale);
+  const detail = machineDetail(machine, stale, now);
   return <article className={`machine ${ready ? 'ready' : busy ? 'busy' : 'neutral'}${selected ? ' tracked' : ''}`}>
     <div className="machine-top"><span className="machine-name">{machine.name}</span><span className="kind">{kind}</span></div>
-    <div className="machine-art">
-      {machine.type === 'dryer' ? <TumbleDryIcon/> : <WashMachineIcon/>}
-      <span className="art-floor"/>
+    <div className="machine-art" aria-hidden="true">
+      <div className="machine-illustration">
+        <MachineIcon dryer={machine.type === 'dryer'}/>
+        <span className="art-floor"/>
+      </div>
     </div>
     <div className="machine-bottom">
       <div className="machine-state"><span className="dot"/>{stale ? 'Status out of date' : machine.label}</div>
@@ -132,7 +139,7 @@ export default function Home() {
   return <main>
     <header className="site-header">
       <a className="brand" href="/" aria-label="Laundry dashboard home">
-        <span className="brand-mark"><WashMachineIcon size={25} strokeWidth={1.75}/></span>
+        <span className="brand-mark"><WashMachineIcon/></span>
         <span>Laundry<span className="brand-sub">VICTORIA POINT</span></span>
       </a>
     </header>
@@ -156,6 +163,7 @@ export default function Home() {
         key={machine.id}
         machine={machine}
         stale={stale}
+        now={clock}
         selected={tracking?.roomId === data.room?.id && tracking?.machineId === machine.id}
         onTrack={track}
       />) : [1, 2, 3, 4].map(value => <div className="machine skeleton" aria-hidden="true" key={value}><div/><div/><div/></div>)}</div>

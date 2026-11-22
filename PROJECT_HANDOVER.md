@@ -19,7 +19,7 @@ The server reads the configured location, its scheduled bookings and active inst
 
 ## Timing
 
-`last_used` is an estimated release timestamp. Equipment feedback can correct it. When a machine is running and the timestamp of its latest payment is valid, `elapsedMinutes` counts full minutes since that payment. This is an approximation of run time. The API sends a derived cycle ID for comparing payments while the machine is running or available.
+`last_used` is an estimated release timestamp. Equipment feedback can correct it. When a machine is running and the timestamp of its latest payment is valid, `elapsedMinutes` counts full minutes since that payment. For an available machine, `finishedAt` gives the release timestamp in Unix milliseconds if it follows the latest valid payment. The browser displays how long ago it finished and updates the label as time passes. The API sends a derived cycle ID for comparing payments while the machine is running or available.
 
 ## Personal machine alerts
 

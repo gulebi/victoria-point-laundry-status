@@ -1,25 +1,18 @@
 // Tabler Icons, MIT. See public/licenses/tabler-icons.txt.
-function Icon({ size, strokeWidth = 1.75, className, children }) {
+function Icon({ size, className, children }) {
   return <svg className={className} width={size} height={size} viewBox="0 0 24 24"
-    fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round"
+    fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"
     aria-hidden="true" focusable="false">
     {children}
   </svg>;
 }
 
-export function WashMachineIcon({ size = 82, strokeWidth = 1.4 } = {}) {
-  return <Icon size={size} strokeWidth={strokeWidth}>
+export function WashMachineIcon() {
+  return <Icon size={25}>
     <path d="M5 5a2 2 0 0 1 2 -2h10a2 2 0 0 1 2 2v14a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2l0 -14"/>
     <path d="M8 14a4 4 0 1 0 8 0a4 4 0 1 0 -8 0"/>
     <path d="M8 6h.01M11 6h.01M14 6h2"/>
     <path d="M8 14c1.333 -.667 2.667 -.667 4 0c1.333 .667 2.667 .667 4 0"/>
-  </Icon>;
-}
-
-export function TumbleDryIcon() {
-  return <Icon size={82} strokeWidth={1.4}>
-    <path d="M3 6a3 3 0 0 1 3 -3h12a3 3 0 0 1 3 3v12a3 3 0 0 1 -3 3h-12a3 3 0 0 1 -3 -3v-12"/>
-    <path d="M6 12a6 6 0 1 0 12 0a6 6 0 1 0 -12 0"/>
   </Icon>;
 }
 

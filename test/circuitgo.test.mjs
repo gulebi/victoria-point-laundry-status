@@ -64,6 +64,26 @@ test('paid run marker stays stable through release and changes with a different 
   assert.equal(free.cycleId, busy.cycleId);
   assert.notEqual(paidAgain.cycleId, busy.cycleId);
 });
+test('finish time requires an available machine and a release after the latest valid payment', () => {
+  const payment = NOW - 1800;
+  const release = NOW - 60;
+  const current = room({ last_used: release, last_payment_timestamp: payment });
+  assert.equal(summarize(current).machines[0].finishedAt, release * 1000);
+  assert.equal(summarize(current, null, [], release).machines[0].finishedAt, release * 1000);
+  assert.equal(summarize(current, null, [], NOW, { scheduled: false, instant: true }).machines[0].finishedAt, null);
+  for (const overrides of [
+    { last_payment_timestamp: undefined },
+    { last_payment_timestamp: release },
+    { last_payment_timestamp: NOW + 1 },
+    { last_used: 0 },
+    { last_used: NOW + 1 },
+    { coin_feedback_enabled: true },
+    { maintenance: true },
+  ]) {
+    const machine = summarize(room({ last_used: release, last_payment_timestamp: payment, ...overrides })).machines[0];
+    assert.equal(machine.finishedAt, null);
+  }
+});
 test('recent payments show zero elapsed minutes until the first full minute', () => {
   const status = summarize(room({ last_used: NOW + 100, last_payment_timestamp: NOW - 59 }));
   assert.equal(status.machines[0].elapsedMinutes, 0);
