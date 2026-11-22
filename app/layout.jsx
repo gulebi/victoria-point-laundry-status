@@ -1,4 +1,5 @@
 import './globals.css';
+import { themeBootstrap } from '../lib/theme.mjs';
 
 export const metadata = {
   title: 'victoria-point-laundry-status',
@@ -11,5 +12,8 @@ export const metadata = {
 export const viewport = { width: 'device-width', initialScale: 1, themeColor: '#f5f6f2' };
 
 export default function RootLayout({ children }) {
-  return <html lang="en-GB"><body>{children}</body></html>;
+  return <html lang="en-GB" suppressHydrationWarning>
+    <head><script dangerouslySetInnerHTML={{ __html: themeBootstrap }}/></head>
+    <body>{children}</body>
+  </html>;
 }

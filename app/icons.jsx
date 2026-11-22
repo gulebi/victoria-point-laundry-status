@@ -29,3 +29,16 @@ export function InfoCircleIcon() {
     <path d="M12 9h.01M11 12h1v4h1"/>
   </Icon>;
 }
+
+export function MoonIcon() {
+  return <Icon size={20} className="theme-moon">
+    <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454l0 .008"/>
+  </Icon>;
+}
+
+export function SunIcon() {
+  return <Icon size={20} className="theme-sun">
+    <path d="M8 12a4 4 0 1 0 8 0a4 4 0 0 0 -8 0"/>
+    <path d="M3 12h1m8 -9v1m8 8h1m-9 8v1m-6.4 -15.4l.7 .7m12.1 -.7l-.7 .7m0 11.4l.7 .7m-12.1 -.7l-.7 .7"/>
+  </Icon>;
+}

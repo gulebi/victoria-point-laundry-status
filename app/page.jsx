@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { machineDetail } from '../lib/machine-detail.mjs';
 import { InfoCircleIcon, RefreshIcon, WashMachineIcon } from './icons';
+import ThemeToggle from './theme-toggle';
 import { useMachineTracking } from './use-machine-tracking';
 
 function MachineIcon({ dryer = false }) {
@@ -10,7 +11,7 @@ function MachineIcon({ dryer = false }) {
     <rect x="8" y="5" width="58" height="74" rx="8" stroke="currentColor" strokeWidth="2"/>
     <path d="M9 23h56M19 14h11M55 14h1" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
     <circle cx="37" cy="48" r="18" stroke="currentColor" strokeWidth="2"/>
-    {dryer ? <><path d="M29 53c-5-8 8-7 3-15M37 57c-5-8 8-7 3-15M45 53c-5-8 8-7 3-15" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"/></>
+    {dryer ? <path d="M29 53c-5-8 8-7 3-15M37 57c-5-8 8-7 3-15M45 53c-5-8 8-7 3-15" transform="translate(-1.5 0)" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"/>
       : <path d="M21 49c6-7 10 7 16 0s10 7 16 0" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"/>}
     <path d="M18 80v2M56 80v2" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
   </svg>;
@@ -142,6 +143,7 @@ export default function Home() {
         <span className="brand-mark"><WashMachineIcon/></span>
         <span>Laundry<span className="brand-sub">VICTORIA POINT</span></span>
       </a>
+      <ThemeToggle/>
     </header>
 
     <section className="intro"><h1>Victoria Point <span>4</span></h1></section>
