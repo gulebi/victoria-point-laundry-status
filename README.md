@@ -30,7 +30,18 @@ Supply values to the server. Keep them out of Git and avoid the `NEXT_PUBLIC_` p
 
 ## Machine alerts
 
-**This is my machine** tracks one cycle in the browser. Select a machine before or during use. The dashboard waits to see an active cycle, then clears the selection and sends one alert when Circuit Go reports the machine available. Alerts require browser permission and an open, running tab.
+**This is my machine** tracks one cycle. Select a machine before or during use and allow notifications. The dashboard waits until Circuit Go reports an active cycle followed by availability, then clears the selection.
+
+When background alerts are configured and the browser registers successfully, the server continues tracking after the tab closes. With tab-based alerts, the page checks availability while it runs.
+
+### Enable background alerts in production
+
+1. Connect an Upstash Redis database to the Vercel project. Set its write credentials as `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN`. The `KV_REST_API_URL` and `KV_REST_API_TOKEN` equivalents work as well.
+2. Add `QSTASH_CURRENT_SIGNING_KEY` and `QSTASH_NEXT_SIGNING_KEY` from your QStash account. Generate a VAPID key pair once with `npx web-push generate-vapid-keys --json` and set `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` and `VAPID_SUBJECT`. Use the production HTTPS site URL or a contact `mailto:` URI for the subject.
+3. Deploy with the production variables. In QStash create a schedule with `*/2 * * * *` that sends a POST to `https://YOUR-PRODUCTION-DOMAIN/api/notification-watches/poll`. QStash signs the request automatically. Open `/api/notification-watches` after QStash's first successful call to confirm it returns a public key.
+4. Select a machine and confirm the dashboard displays **You can close this tab**. The browser must support Web Push. On iOS and iPadOS, open the web app from the Home Screen.
+
+The server keeps each selection for up to six hours. It removes it after successful delivery, cancellation or a change to a different cycle.
 
 ## Checks
 

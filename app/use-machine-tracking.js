@@ -7,8 +7,21 @@ function notificationPermission() {
 }
 
 function withTrackingLock(action) {
-  if (navigator.locks) void navigator.locks.request(TRACKING_KEY, action).catch(action);
-  else action();
+  return navigator.locks ? navigator.locks.request(TRACKING_KEY, action) : Promise.resolve().then(action);
+}
+
+function requestWatch(method, body) {
+  return fetch('/api/notification-watches', {
+    method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+  });
+}
+
+async function subscribeForPush(key) {
+  const worker = await navigator.serviceWorker.register('/laundry-notifications.js');
+  const active = worker.active ? worker : await navigator.serviceWorker.ready;
+  const appKey = Uint8Array.from(atob(key.replace(/-/g, '+').replace(/_/g, '/')), char => char.charCodeAt(0));
+  return await active.pushManager.getSubscription() ??
+    active.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: appKey });
 }
 
 async function showReadyNotification(tracking) {
@@ -41,6 +54,8 @@ export function useMachineTracking() {
   const [completion, setCompletion] = useState(null);
   const [permission, setPermission] = useState('unavailable');
   const [storageUnavailable, setStorageUnavailable] = useState(false);
+  const [pushKey, setPushKey] = useState('');
+  const [alertError, setAlertError] = useState('');
   const current = useRef(null);
   const memoryOnly = useRef(false);
 
@@ -82,37 +97,84 @@ export function useMachineTracking() {
     const syncPermission = () => setPermission(notificationPermission());
     sync(load());
     syncPermission();
+    const controller = new AbortController();
+    if ('PushManager' in window && 'serviceWorker' in navigator) {
+      fetch('/api/notification-watches', { signal: controller.signal, cache: 'no-store' })
+        .then(response => response.ok ? response.json() : null)
+        .then(config => { if (config?.publicKey) setPushKey(config.publicKey); })
+        .catch(() => {});
+    }
     window.addEventListener('storage', syncStorage);
     window.addEventListener('focus', syncPermission);
     return () => {
       window.removeEventListener('storage', syncStorage);
       window.removeEventListener('focus', syncPermission);
+      controller.abort();
     };
   }, [load, sync]);
 
   async function enableNotifications() {
-    if (notificationPermission() !== 'default') return;
+    let granted = notificationPermission();
     try {
-      setPermission(await Notification.requestPermission());
+      if (granted === 'default') granted = await Notification.requestPermission();
+      setPermission(granted);
     } catch {
       setPermission('unavailable');
+      return;
+    }
+    if (granted !== 'granted' || !pushKey) return;
+    try {
+      await withTrackingLock(async () => {
+        const selected = load();
+        if (!selected || selected.watchId) return;
+        const subscription = await subscribeForPush(pushKey);
+        const response = await requestWatch('POST', { machineId: selected.machineId, subscription });
+        if (!response.ok) throw new Error('Could not register background alerts');
+        const { watchId, expiresAt } = await response.json();
+        if (typeof watchId !== 'string' || !Number.isFinite(expiresAt)) throw new Error('Invalid background alert');
+        save({ ...selected, watchId, watchExpiresAt: expiresAt });
+        setAlertError('');
+      });
+    } catch {
+      setAlertError('Could not enable background alerts. Try again.');
     }
   }
 
   function trackMachine(snapshot, machine) {
     const record = startTracking(snapshot, machine);
     if (!record) return;
+    setAlertError('');
+    void withTrackingLock(() => save(record));
     void enableNotifications();
-    withTrackingLock(() => save(record));
   }
 
-  const hasActiveTracking = useCallback(() => current.current !== null, []);
+  async function stopTracking() {
+    try {
+      await withTrackingLock(async () => {
+        const selected = load();
+        if (selected?.watchId && selected.watchExpiresAt > Date.now()) {
+          const response = await requestWatch('DELETE', { watchId: selected.watchId });
+          if (!response.ok) throw new Error('Could not cancel background alerts');
+        }
+        save(null);
+        setAlertError('');
+      });
+    } catch {
+      setAlertError('Could not stop background alerts. Try again.');
+    }
+  }
+
+  const needsBrowserPolling = useCallback(() => current.current !== null && !current.current.watchId, []);
 
   const observeSnapshot = useCallback(snapshot => {
-    if (!hasActiveTracking()) return;
-    withTrackingLock(() => {
+    if (!current.current) return;
+    void withTrackingLock(() => {
       // Read the latest record inside the lock to avoid duplicate alerts from other tabs.
       const previous = load();
+      if (previous?.watchId && previous.watchExpiresAt <= Date.now()) {
+        save(null);
+        return;
+      }
       const next = updateTracking(previous, snapshot);
       if (next === previous) return;
       if (next?.phase !== 'ready') {
@@ -121,11 +183,11 @@ export function useMachineTracking() {
       }
       save(null);
       setCompletion(next);
-      if (notificationPermission() === 'granted') void showReadyNotification(next);
-    });
-  }, [hasActiveTracking, load, save]);
+      if (!previous.watchId && notificationPermission() === 'granted') void showReadyNotification(next);
+    }).catch(() => {});
+  }, [load, save]);
 
-  return { tracking, completion, permission, storageUnavailable, trackMachine,
-    stopTracking: () => withTrackingLock(() => save(null)),
-    dismissCompletion: () => setCompletion(null), enableNotifications, hasActiveTracking, observeSnapshot };
+  return { tracking, completion, permission, storageUnavailable, trackMachine, stopTracking,
+    canEnablePush: Boolean(pushKey), alertError, dismissCompletion: () => setCompletion(null),
+    enableNotifications, needsBrowserPolling, observeSnapshot };
 }

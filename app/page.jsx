@@ -50,11 +50,15 @@ function MachineCard({ machine, stale, selected, onTrack }) {
   </article>;
 }
 
-function TrackingPanel({ tracking, permission, storageUnavailable, enableNotifications, stopTracking, dismissCompletion }) {
+function TrackingPanel({ tracking, permission, storageUnavailable, canEnablePush, alertError, enableNotifications, stopTracking, dismissCompletion }) {
   const ready = tracking.phase === 'ready';
-  const notificationHint = permission === 'granted'
-    ? 'Keep this tab open for alerts. Your browser may pause it in the background.'
-    : 'Updates appear here. Enable browser notifications for a system alert.';
+  const canEnable = !tracking.watchId && (permission === 'default' || (permission === 'granted' && canEnablePush));
+  let notificationHint = 'Enable notifications for a system alert.';
+  if (permission === 'denied' || permission === 'unavailable') notificationHint = 'System alerts are unavailable. Updates appear here.';
+  else if (tracking.watchId) notificationHint = 'You can close this tab. We’ll notify you when this cycle finishes.';
+  else if (permission === 'granted') notificationHint = canEnablePush
+    ? 'Enable background alerts to get notified with the tab closed.'
+    : 'Alerts currently work while the dashboard is running.';
   return <aside className={`tracking-panel${ready ? ' tracking-ready' : ''}`} aria-label="Your machine">
     <div role="status">
       <strong>{ready ? `${tracking.name} was reported free` : `Tracking ${tracking.name}`}</strong>
@@ -62,12 +66,13 @@ function TrackingPanel({ tracking, permission, storageUnavailable, enableNotific
         ? <p>Circuit Go reported it available at {timeLabel(tracking.checkedAt)}. You can collect your laundry.</p>
         : <>
           <p>{tracking.phase === 'waiting' ? 'Waiting for Circuit Go to show it in use.' : 'Watching for the next available status.'}</p>
-          <p>{permission === 'denied' || permission === 'unavailable' ? 'System alerts are unavailable. Updates appear here.' : notificationHint}</p>
+          <p>{notificationHint}</p>
         </>}
       {storageUnavailable && <p>Browser storage is unavailable. The selection will reset if you reload this tab.</p>}
+      {alertError && <p role="alert">{alertError}</p>}
     </div>
     <div className="tracking-actions">
-      {!ready && permission === 'default' && <button className="tracking-button" onClick={enableNotifications}>Enable notifications</button>}
+      {!ready && canEnable && <button className="tracking-button" onClick={enableNotifications}>{canEnablePush ? 'Enable background alerts' : 'Enable notifications'}</button>}
       <button className="tracking-button" onClick={ready ? dismissCompletion : stopTracking}>{ready ? 'Dismiss' : 'Stop tracking'}</button>
     </div>
   </aside>;
@@ -81,7 +86,7 @@ export default function Home() {
   const [filter, setFilter] = useState('all');
   const refreshRef = useRef(null);
   const tracker = useMachineTracking();
-  const { hasActiveTracking, observeSnapshot } = tracker;
+  const { needsBrowserPolling, observeSnapshot } = tracker;
 
   useEffect(() => {
     let stopped = false, pending = false, timer, failures = 0, controller;
@@ -91,7 +96,7 @@ export default function Home() {
     }
     async function update() {
       if (stopped || pending) return;
-      if (document.hidden && !hasActiveTracking()) { schedule(); return; }
+      if (document.hidden && !needsBrowserPolling()) { schedule(); return; }
       pending = true;
       controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 55000);
@@ -126,7 +131,7 @@ export default function Home() {
     const ticker = setInterval(() => setClock(Date.now()), 1000);
     update();
     return () => { stopped = true; clearTimeout(timer); clearInterval(ticker); controller?.abort(); document.removeEventListener('visibilitychange', visible); refreshRef.current = null; };
-  }, [hasActiveTracking, observeSnapshot]);
+  }, [needsBrowserPolling, observeSnapshot]);
 
   const stale = Boolean(error || (data && clock > Date.parse(data.validUntil)));
   const good = data && !stale;
