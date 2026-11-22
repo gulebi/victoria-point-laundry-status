@@ -1,22 +1,8 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { InfoCircleIcon, RefreshIcon, TumbleDryIcon, WashMachineIcon } from './icons';
 import { useMachineTracking } from './use-machine-tracking';
-
-function RefreshIcon({ spinning = false }) {
-  return <svg className={spinning ? 'spin' : ''} width="17" height="17" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"/><path d="M6.1 7.1a7.1 7.1 0 0 1 11.7-1L20 9M4 15l2.2 2.9a7.1 7.1 0 0 0 11.7-1" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"/></svg>;
-}
-
-function MachineIcon({ dryer = false }) {
-  return <svg width="74" height="86" viewBox="0 0 74 86" fill="none" aria-hidden="true">
-    <rect x="8" y="5" width="58" height="74" rx="8" stroke="currentColor" strokeWidth="2"/>
-    <path d="M9 23h56M19 14h11M55 14h1" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-    <circle cx="37" cy="48" r="18" stroke="currentColor" strokeWidth="2"/>
-    {dryer ? <><path d="M29 53c-5-8 8-7 3-15M37 57c-5-8 8-7 3-15M45 53c-5-8 8-7 3-15" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"/></>
-      : <path d="M21 49c6-7 10 7 16 0s10 7 16 0" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"/>}
-    <path d="M18 80v2M56 80v2" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-  </svg>;
-}
 
 function timeLabel(value) {
   if (!value) return '—';
@@ -37,7 +23,10 @@ function MachineCard({ machine, stale, selected, onTrack }) {
   const detail = machineDetail(machine, stale);
   return <article className={`machine ${ready ? 'ready' : busy ? 'busy' : 'neutral'}${selected ? ' tracked' : ''}`}>
     <div className="machine-top"><span className="machine-name">{machine.name}</span><span className="kind">{kind}</span></div>
-    <div className="machine-art"><MachineIcon dryer={machine.type === 'dryer'}/><span className="art-floor"/></div>
+    <div className="machine-art">
+      {machine.type === 'dryer' ? <TumbleDryIcon/> : <WashMachineIcon/>}
+      <span className="art-floor"/>
+    </div>
     <div className="machine-bottom">
       <div className="machine-state"><span className="dot"/>{stale ? 'Status out of date' : machine.label}</div>
       {detail && <span className="machine-detail">{detail}</span>}
@@ -141,7 +130,12 @@ export default function Home() {
   const track = tracking ? null : machine => tracker.trackMachine(data, machine);
 
   return <main>
-    <header className="site-header"><a className="brand" href="/" aria-label="Laundry dashboard home"><span className="brand-mark"><svg width="23" height="23" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="8.5" stroke="currentColor" strokeWidth="1.7"/><path d="M4 13c3-5 5 5 8 0s5 5 8 0" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"/></svg></span><span>Laundry<span className="brand-sub">VICTORIA POINT</span></span></a></header>
+    <header className="site-header">
+      <a className="brand" href="/" aria-label="Laundry dashboard home">
+        <span className="brand-mark"><WashMachineIcon size={25} strokeWidth={1.75}/></span>
+        <span>Laundry<span className="brand-sub">VICTORIA POINT</span></span>
+      </a>
+    </header>
 
     <section className="intro"><h1>Victoria Point <span>4</span></h1></section>
 
@@ -170,6 +164,12 @@ export default function Home() {
       {good && data.partial && <div className="notice partial">Some machine statuses could not be confirmed.</div>}
     </section>
 
-    <footer><div className="footer-note"><span className="info-mark" aria-hidden="true">i</span><p>Run time is estimated from the last payment. An available machine may still contain laundry.</p></div><div className="footer-bottom"><span>VICTORIA POINT 4</span><span>Not affiliated with Circuit Go</span></div></footer>
+    <footer>
+      <div className="footer-note">
+        <InfoCircleIcon/>
+        <p>Run time is estimated from the last payment. An available machine may still contain laundry.</p>
+      </div>
+      <div className="footer-bottom"><span>VICTORIA POINT 4</span><span>Not affiliated with Circuit Go</span></div>
+    </footer>
   </main>;
 }
